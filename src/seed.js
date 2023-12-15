@@ -25,9 +25,16 @@ databaseConnect().then(async () => {
 	// 	photos: [String] // URL to some file storage like AWS S3, Google Cloud, Azure, whatever 
 	// }};
 
+	// Create User first
+    await seedUser();
+
+    // Retrieve the newly created user
+    const newUser = await User.findOne({ email: "admin@example.com" });
+
+
     let newBlog = new Blog({
-        blogid: 1,
-		date: "01/01/2023",
+        // blogid: 1,
+		// date: "01/01/2023",
         title: "Welcome to Japan",
         locationname: "Shinjuku",
 		locationaddress: "1 Nihon St",
@@ -35,10 +42,10 @@ databaseConnect().then(async () => {
 		locationcountry: "Japan",
 		body: "This blog post is about Japan", 
 		tags: "Japan",
-		favouritePlacesToChill: ["Shinjuku", "Shibuya"],
+		// favouritePlacesToChill: ["Shinjuku", "Shibuya"],
 		imagedata: "https://travellingdiarybucket.s3.ap-southeast-2.amazonaws.com/japanimage.jpg",
-		userid: "1",
-		like: "1"
+		user: newUser,
+		like: 1
     })
 
     await newBlog.save().then(() => {
@@ -51,43 +58,46 @@ databaseConnect().then(async () => {
 })
 
 const seedUser = async () => {
-	try {
-	  // Check if user already exists
-	  const existingUser = await User.findOne({ email: "admin@example.com" });
-	  if (existingUser) {
-		console.log("User already exists");
-		return;
-	  }
-  
-	  // Create a new user
-	  const newUser = new User({
-		email: "admin@example.com",
-		password: "password1",
-		userid: "1",
-		username: "admin",
-		firstname: "John",
-		lastname: "Doe",
-		regionsofinterest: "Tokyo",
-		countriesofinterest: "Japan",
-		isadmin: "true",
-	  });
-  
-	  // Hash the password
-	  const salt = await bcrypt.genSalt(10);
-	  const hashedPassword = await bcrypt.hash(newUser.password, salt);
-  
-	  newUser.password = hashedPassword;
-  
-	  // Save the user to the database
-	  await newUser.save();
-  
-	  console.log("User created successfully");
-	} catch (error) {
-	  console.error(error);
-	} finally {
-	  mongoose.disconnect();
-	}
-  };
+    let client;
+    try {
+        // Check if user already exists
+        const existingUser = await User.findOne({ email: "admin@example.com" });
+        if (existingUser) {
+            console.log("User already exists");
+            return;
+        }
+
+        // Create a new user
+        const newUser = new User({
+            email: "admin@example.com",
+            password: "password1",
+            username: "admin",
+            firstName: "John",
+            lastName: "Doe",
+            regionsOfInterest: "Tokyo",
+            countriesOfInterest: "Japan",
+            isAdmin: "true",
+        });
+
+        // Hash the password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newUser.password, salt);
+
+        newUser.password = hashedPassword;
+
+        // Save the user to the database
+        await newUser.save();
+
+        console.log("User created successfully");
+    } catch (error) {
+        console.error(error);
+    } finally {
+        // Disconnect from the database after all operations are completed
+        if (client) {
+            client.close();
+        }
+    }
+};
   
   seedUser();
 		

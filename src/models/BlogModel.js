@@ -2,15 +2,16 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const BlogSchema = new Schema({
-	blogid: {
-		type: Number,
-		required: true,
-		unique: true
-    },
+	// blogid: {
+	// 	type: Number,
+	// 	required: true,
+	// 	unique: true
+    // },
 	date: {
-		type: String,
-		required: true,
-		unique: false
+		type: Date,
+		required: false,
+		unique: false,
+		default: new Date(Date.now())
 	},
     title: {
 		type: String,
@@ -52,11 +53,9 @@ const BlogSchema = new Schema({
 		required: true,
 		unique: false
 	},
-	userid: {
-		type: String,
-		required: true,
-		unique: false,
-		isforeignkey: true
+	user: {
+		type: mongoose.Types.ObjectId,
+		ref: 'User'
 	},
 	like: {
 		type: Number,
