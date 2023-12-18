@@ -59,7 +59,7 @@ const BlogSchema = new Schema({
 	},
 	like: {
 		type: Number,
-		required: true,
+		required: false,
 		unique: false
 	}
 });

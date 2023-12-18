@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const User = require("../models/UserModel");
+const { User } = require("../models/UserModel");
 
 // User login
 router.post("/login", async (req, res) => {
@@ -22,12 +22,36 @@ router.post("/login", async (req, res) => {
     }
 
     // Generate a JWT token
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "24h"
-    });
+    // const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+    //   expiresIn: "24h"
+    // });
+    function generateJwt(userId){
 
-    res.json({ token });
+      let newJwt = jwt.sign(
+        // Payload
+            {
+                userId, 
+            },
+        
+    
+        // Secret key for server-only verification
+        process.env.JWT_KEY,
+    
+        // Options
+        {
+          expiresIn: "24h"
+        }
+    
+      );
+    
+      return newJwt;
+    }
+
+    let freshJwt = generateJwt(user._id.toString());
+
+    res.json({ jwt: freshJwt });
   } catch (error) {
+    console.error("Login error:", error); // Log the error details
     res.status(500).json({ message: "Server error" });
   }
 });

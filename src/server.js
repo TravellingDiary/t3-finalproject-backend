@@ -11,11 +11,7 @@ const corsOptions = {
     optionsSuccessStatus: 200
 }
 
-// Routes
-app.use("/users", require("./routes/users"));
 
-const UserRouter = require('./controllers/UserController');
-app.use('/users', UserRouter);
 
 app.use(cors(corsOptions));
 
@@ -26,6 +22,15 @@ app.get("/", (request, response) => {
         message:"Hello world"
     });
 });
+
+// Routes
+app.use("/users", require("./routes/users"));
+
+const UserRouter = require('./controllers/UserController');
+app.use('/users', UserRouter);
+
+const BlogRouter = require('./controllers/BlogController');
+app.use('/blog', BlogRouter);
 
 module.exports = {
     app
