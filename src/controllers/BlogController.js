@@ -1,20 +1,26 @@
 const express = require('express');
 const { Blog } = require('../models/BlogModel');
 const router = express.Router();
+const { authenticateJWT } = require('../middleware/AuthMiddleware');
+const { User } = require('../models/UserModel');
 
 // Find All blogs in the DB
-router.get("/all", async (request, response) => {
-    // Empty object in .find() means get ALL documents
-    const result = await Blog.find({}).populate('user');
+router.get("/all", authenticateJWT, async (request, response) => {
+    // Check if authentication was successful
+    if (request.user && request.user.message === "Authentication successful") {
+        // Empty object in .find() means get ALL documents
+        const result = await Blog.find({}).populate('user');
 
-    response.json({
-        Blog: result
-    });
-
+        response.json({
+            Blog: result
+        });
+    } else {
+        response.status(403).json({ message: "Forbidden: Authentication failed" });
+    }
 });
 
 // Find one blog by its ID
-router.get("/:id", async (request, response) => {
+router.get("/:id", authenticateJWT, async (request, response) => {
     try {
       const blogId = request.params.id;
   
@@ -34,11 +40,11 @@ router.get("/:id", async (request, response) => {
   });
 
 // Find all blogs by username
-router.get("/multiple/username", async (request, response) => {
+router.get("/multiple/username", authenticateJWT, async (request, response) => {
     try {
-        const blogUsername = request.query.username;
-
-        const result = await Blog.find({ blogUsername }).populate('user');
+        const blogUsername = request.query.q;
+        const user_id = await User.find({username: blogUsername})
+        const result = await Blog.find({ user: user_id }).populate('user');
 
         if (!result || result.length === 0) {
             return response.status(404).json({ error: 'Blogs not found' });
@@ -55,7 +61,7 @@ router.get("/multiple/username", async (request, response) => {
 
 
 // Find blog by its location 
-router.get("/multiple/location", async (request, response) => {
+router.get("/multiple/location", authenticateJWT, async (request, response) => {
     try {
         const locationToFilterBy = request.query.locationToFilterBy;
 
@@ -89,7 +95,7 @@ router.get("/multiple/location", async (request, response) => {
 
 // Create a new blog in the DB
 // POST localhost:3000/blog/
-router.post("/", async (request, response) => {
+router.post("/", authenticateJWT, async (request, response) => {
 	let result = await Blog.create(request.body);
 
 	response.json({
