@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const CommentSchema = new Schema({
-	commentid: {
+	commentId: {
 		type: Number,
 		required: true,
 		unique: true
@@ -17,13 +17,13 @@ const CommentSchema = new Schema({
 		required: true,
 		unique: false
 	},
-	userid: {
+	userId: {
 		type: String,
 		required: true,
 		unique: false,
         isforeignkey: true
 	},
-	blogid: {
+	blogId: {
 		type: Number,
 		required: true,
 		unique: false,
