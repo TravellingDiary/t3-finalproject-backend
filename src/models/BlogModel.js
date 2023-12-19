@@ -43,14 +43,19 @@ const BlogSchema = new Schema({
 		required: true,
 		unique: false
 	},
-	tags: {
+	// tags: {
+	// 	type: String,
+	// 	required: true,
+	// 	unique: false
+	// },
+	imagedata: {
 		type: String,
 		required: true,
 		unique: false
 	},
-	imagedata: {
+	imageUrl: {
 		type: String,
-		required: true,
+		required: false,
 		unique: false
 	},
 	user: {
