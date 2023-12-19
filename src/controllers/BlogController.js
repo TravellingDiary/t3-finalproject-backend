@@ -10,7 +10,8 @@ const crypto = require('crypto');
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage })
 
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 require('dotenv').config();
 const bucketName = process.env.BUCKET_NAME;
@@ -34,10 +35,20 @@ router.get("/all", authenticateJWT, async (request, response) => {
     // Check if authentication was successful
     if (request.user && request.user.message === "Authentication successful") {
         // Empty object in .find() means get ALL documents
-        const result = await Blog.find({}).populate('user');
+        const results = await Blog.find({}).populate('user');
+
+        for (const result of results) {
+            const getObjectParams = {
+                Bucket: bucketName,
+                Key: result.imagedata
+            }
+            const command = new GetObjectCommand(getObjectParams);
+            const url = await getSignedUrl(s3, command, {expiresIn: 3600})
+            result.imageUrl = url
+        }
 
         response.json({
-            Blog: result
+            Blog: results
         });
     } else {
         response.status(403).json({ message: "Forbidden: Authentication failed" });
