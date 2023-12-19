@@ -11,6 +11,7 @@ function authenticateJWT(req, res, next) {
     if (err) {
       return res.status(403).json({ message: "Unauthorized: Invalid token" });
     }
+    console.log("Decoded User:", user);
 
     req.user = { message: "Authentication successful", ...user };
     next();

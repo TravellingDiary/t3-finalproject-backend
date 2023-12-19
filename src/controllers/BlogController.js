@@ -3,6 +3,31 @@ const { Blog } = require('../models/BlogModel');
 const router = express.Router();
 const { authenticateJWT } = require('../middleware/AuthMiddleware');
 const { User } = require('../models/UserModel');
+const multer  = require('multer')
+const crypto = require('crypto');
+
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage })
+
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+
+require('dotenv').config();
+const bucketName = process.env.BUCKET_NAME;
+const bucketRegion= process.env.BUCKET_REGION
+const accessKey = process.env.ACCESS_KEY
+const secretAccessKey = process.env.SECRET_ACCESS_KEY
+
+const s3 = new S3Client({
+    credentials: {
+        accessKeyId: accessKey,
+        secretAccessKey: secretAccessKey,
+    },
+    region: bucketRegion
+})
+
+// This creates a random image name so that image files do not get over written in S3
+const randomImageName = (bytes = 32) => crypto.randomBytes(bytes).toString('hex')
 
 // Find All blogs in the DB
 router.get("/all", authenticateJWT, async (request, response) => {
@@ -92,29 +117,78 @@ router.get("/multiple/location", authenticateJWT, async (request, response) => {
     }
 });
 
-
 // Create a new blog in the DB
 // POST localhost:3000/blog/
-router.post("/", authenticateJWT, async (request, response) => {
-	let result = await Blog.create(request.body);
+router.post("/image", authenticateJWT, upload.single('image'), async (request, response) => {
+	try{
+        
+        console.log(request.user)
+        const user = await User.findOne({ _id: request.user.userId });
 
-	response.json({
-		Blog: result
-	});
+        if (!user) {
+            return response.status(404).json({ error: 'User not found' });
+        }
 
+        console.log("request.body", request.body)
+        console.log("request.file", request.file)
+
+        const imageName = randomImageName();
+        const params = {
+            Bucket: bucketName,
+            Key: imageName,
+            Body: request.file.buffer,
+            ContentType: request.file.mimetype,
+        }
+
+        const command = new PutObjectCommand(params)
+        await s3.send(command)
+
+        // Create a new blog entry in the database
+        const result = await Blog.create({
+            title: request.body.title,
+            locationname: request.body.locationname,
+            locationaddress: request.body.locationaddress,
+            locationcity: request.body.locationcity,
+            locationcountry: request.body.locationcountry,
+            body: request.body.body,
+            tags: request.body.tags,
+            imagedata: imageName, // Store the image name in the database
+            user: user, 
+        });
+
+	    response.json({
+	    	Blog: result
+	    });
+    } catch (error) {
+        console.error("Error:", error);
+        response.status(500).json({ error: "Internal Server Error" });
+    }
 });
+
 
 // Update an existing blog in the DB.
 // Find one blog by its ID, and modify that blog. 
 // Patch is for whatever properties are provided,
 // does not overwrite or remove any unmentioned properties of the cat 
-router.patch("/:id", async (request, response) => {
-	let result = null;
-
-	response.json({
-		Blog: result
-	});
-
+router.patch("/:id", authenticateJWT, async (request, response) => {
+	try {
+        const blogId = request.params.id;
+        console.log(blogId)
+    
+        const result = await Blog.findById({ _id: blogId }).populate('user');
+        console.log(result)
+    
+        if (!result) {
+          return response.status(404).json({ error: 'Blog not found' });
+        }
+    
+        response.json({
+          Blog: result
+        });
+      } catch (error) {
+        console.error("Error fetching blog by ID:", error);
+        response.status(500).json({ error: 'Internal Server Error' });
+      }
 });
 
 // Find one blog by its ID,
