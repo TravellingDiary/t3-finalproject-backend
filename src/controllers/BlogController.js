@@ -5,12 +5,13 @@ const { authenticateJWT } = require('../middleware/AuthMiddleware');
 const { User } = require('../models/UserModel');
 const multer  = require('multer')
 const crypto = require('crypto');
+const sharp = require('sharp');
 
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage })
 
-const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 require('dotenv').config();
@@ -58,36 +59,57 @@ router.get("/all", authenticateJWT, async (request, response) => {
 // Find one blog by its ID
 router.get("/:id", authenticateJWT, async (request, response) => {
     try {
-      const blogId = request.params.id;
+        const blogId = request.params.id;
   
-      const result = await Blog.findById(blogId).populate('user');
+        const result = await Blog.findById(blogId).populate('user');
+
+        //   generate signedUrl so that the client can use the imageUrl to fetch the image from Amazon s3 bucket
+        const getObjectParams = {
+            Bucket: bucketName,
+            Key: result.imagedata
+        }
+        const command = new GetObjectCommand(getObjectParams);
+        const url = await getSignedUrl(s3, command, {expiresIn: 3600})
+        result.imageUrl = url
   
-      if (!result) {
+        if (!result) {
         return response.status(404).json({ error: 'Blog not found' });
-      }
+        }
   
-      response.json({
-        Blog: result
-      });
+        response.json({
+            Blog: result
+        });
     } catch (error) {
-      console.error("Error fetching blog by ID:", error);
-      response.status(500).json({ error: 'Internal Server Error' });
+        console.error("Error fetching blog by ID:", error);
+        response.status(500).json({ error: 'Internal Server Error' });
     }
-  });
+});
 
 // Find all blogs by username
 router.get("/multiple/username", authenticateJWT, async (request, response) => {
     try {
         const blogUsername = request.query.q;
         const user_id = await User.find({username: blogUsername})
-        const result = await Blog.find({ user: user_id }).populate('user');
+        const results = await Blog.find({ user: user_id }).populate('user');
 
-        if (!result || result.length === 0) {
+        //   generate signedUrl so that the client can use the imageUrl to fetch the image from Amazon s3 bucket
+        //   generate signedUrl so that the client can use the imageUrl to fetch the image from Amazon s3 bucket
+        for (const result of results) {
+            const getObjectParams = {
+                Bucket: bucketName,
+                Key: result.imagedata
+            }
+            const command = new GetObjectCommand(getObjectParams);
+            const url = await getSignedUrl(s3, command, {expiresIn: 3600})
+            result.imageUrl = url
+        }
+
+        if (!results || results.length === 0) {
             return response.status(404).json({ error: 'Blogs not found' });
         }
-        console.log("Query result:", result);
+        console.log("Query result:", results);
         response.json({
-            data: result
+            data: results
         });
     } catch (error) {
         console.error("Error fetching blogs by username:", error);
@@ -102,7 +124,7 @@ router.get("/multiple/location", authenticateJWT, async (request, response) => {
         const locationToFilterBy = request.query.locationToFilterBy;
 
         // Use a regular expression to perform a case-insensitive search on multiple fields
-        const result = await Blog.find({
+        const results = await Blog.find({
             $or: [
                 { locationname: { $regex: `^${locationToFilterBy}$`, $options: 'i' } },
                 { locationaddress: { $regex: `^${locationToFilterBy}$`, $options: 'i' } },
@@ -111,11 +133,24 @@ router.get("/multiple/location", authenticateJWT, async (request, response) => {
             ],
         });
 
-        console.log("Query result:", result);
+                console.log("Query result:", results);
 
-        if (result.length > 0) {
+        //   generate signedUrl so that the client can use the imageUrl to fetch the image from Amazon s3 bucket
+        for (const result of results) {
+            const getObjectParams = {
+                Bucket: bucketName,
+                Key: result.imagedata
+            }
+            const command = new GetObjectCommand(getObjectParams);
+            const url = await getSignedUrl(s3, command, {expiresIn: 3600})
+            result.imageUrl = url
+        }
+
+
+
+        if (results.length > 0) {
             response.json({
-                data: result,
+                data: results,
             });
         } else {
             console.log("No blogs exist with the location specified " + locationToFilterBy);
@@ -143,11 +178,18 @@ router.post("/image", authenticateJWT, upload.single('image'), async (request, r
         console.log("request.body", request.body)
         console.log("request.file", request.file)
 
+        // resize image
+        const buffer = await sharp(request.file.buffer).resize({
+            height: 1920,
+            width: 1080, 
+            fit: "cover"
+        }).toBuffer()
+
         const imageName = randomImageName();
         const params = {
             Bucket: bucketName,
             Key: imageName,
-            Body: request.file.buffer,
+            Body: buffer,
             ContentType: request.file.mimetype,
         }
 
@@ -180,37 +222,117 @@ router.post("/image", authenticateJWT, upload.single('image'), async (request, r
 // Update an existing blog in the DB.
 // Find one blog by its ID, and modify that blog. 
 // Patch is for whatever properties are provided,
-// does not overwrite or remove any unmentioned properties of the cat 
-router.patch("/:id", authenticateJWT, async (request, response) => {
-	try {
+// does not overwrite or remove any unmentioned properties of the blog
+router.patch("/image/:id", authenticateJWT, upload.single('image'), async (request, response) => {
+    try {
         const blogId = request.params.id;
-        console.log(blogId)
-    
+        console.log(blogId);
+
         const result = await Blog.findById({ _id: blogId }).populate('user');
-        console.log(result)
-    
+        console.log(result);
+
         if (!result) {
-          return response.status(404).json({ error: 'Blog not found' });
+            return response.status(404).json({ error: 'Blog not found' });
         }
-    
-        response.json({
-          Blog: result
-        });
-      } catch (error) {
-        console.error("Error fetching blog by ID:", error);
+
+        console.log(request.user.userId)
+        console.log(result.user._id)
+
+        // Check if the logged in user is the user that created the blog
+        if (result.user._id.toString() === request.user.userId) {
+            // Update the blog properties
+            result.title = request.body.title || result.title;
+            result.locationname = request.body.locationname || result.locationname;
+            result.locationaddress = request.body.locationaddress || result.locationaddress;
+            result.locationcity = request.body.locationcity || result.locationcity;
+            result.locationcountry = request.body.locationcountry || result.locationcountry;
+            result.body = request.body.body || result.body;
+
+            // Check if a new image is provided
+            if (request.file) {
+                // Resize and upload the new image
+                const buffer = await sharp(request.file.buffer).resize({
+                    height: 1920,
+                    width: 1080,
+                    fit: "cover"
+                }).toBuffer();
+
+                const imageName = randomImageName();
+                const params = {
+                    Bucket: bucketName,
+                    Key: imageName,
+                    Body: buffer,
+                    ContentType: request.file.mimetype,
+                };
+
+                const command = new PutObjectCommand(params);
+                await s3.send(command);
+
+                // Update the image name in the blog
+                result.imagedata = imageName;
+            }
+
+            // Save the updated blog
+            await result.save();
+
+            response.json({
+                Blog: result
+            });
+        } else {
+            const errorMessage = "You are not authorized to edit this blog";
+            response.status(403).json({
+                Blog: errorMessage
+            });
+        }
+    } catch (error) {
+        console.error("Error updating blog by ID:", error);
         response.status(500).json({ error: 'Internal Server Error' });
-      }
+    }
 });
+
 
 // Find one blog by its ID,
 // and delete it from the DB.
-router.delete("/:id", async (request, response) => {
-	let result = null;
+router.delete("/delete/:id", authenticateJWT, async (request, response) => {
+	try {
+        const blogId = request.params.id;
+        console.log(blogId);
 
-	response.json({
-		Blog: result
-	});
+        const result = await Blog.findOne({ _id: blogId }).populate('user');
+        console.log(result);
 
+        if (!result) {
+            return response.status(404).json({ error: 'Blog not found' });
+        }
+
+        console.log(request.user.userId)
+        // Check if the logged in user is the user that created the blog
+        if (result.user._id.toString() === request.user.userId) {
+
+            // Delete picture in S3 bucket
+            const params = {
+                Bucket: bucketName,
+                Key: result.imagedata,
+            };
+            const command = new DeleteObjectCommand(params);
+            await s3.send(command);
+        
+            // Delete blog
+            const deletedBlog = await Blog.deleteOne({ _id: blogId })
+
+            response.json({
+                Blog: deletedBlog
+            });
+        } else {
+            const errorMessage = "You are not authorized to delete this blog";
+            response.status(403).json({
+                Blog: errorMessage
+            });
+        }
+    } catch (error) {
+        console.error("Error deleting blog by ID:", error);
+        response.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
 

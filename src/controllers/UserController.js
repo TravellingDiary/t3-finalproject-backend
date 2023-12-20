@@ -2,6 +2,7 @@
 const express = require('express');
 const { User } = require('../models/UserModel');
 const router = express.Router();
+const bcrypt = require("bcrypt");
 
 // Define routes for user controller
 // GET /users - Get all users
@@ -38,13 +39,21 @@ router.post('/createuser', async (req, res) => {
         // Validate request body
         if (!username || !email || !password || !firstName || !lastName || !regionsOfInterest || !countriesOfInterest) {
             return res.status(400).json({ error: 'Please provide username and email' });
-    }
+        }
 
-    const user = new User({ username, password, firstName, lastName, email, regionsOfInterest, countriesOfInterest, isAdmin });
+        const user = new User({ username, password, firstName, lastName, email, regionsOfInterest, countriesOfInterest, isAdmin });
+        
+        // Hash the password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(user.password, salt);
+
+        user.password = hashedPassword;
+
+        // Save the user to the database
         await user.save();
 
-    res.json(user);
-        } catch (err) {
+        res.json(user);
+    } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Server Error' });
     }
