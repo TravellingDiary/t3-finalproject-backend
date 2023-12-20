@@ -41,7 +41,6 @@ databaseConnect().then(async () => {
 		locationcity: "Tokyo",
 		locationcountry: "Japan",
 		body: "This blog post is about Japan", 
-		tags: "Japan",
 		// favouritePlacesToChill: ["Shinjuku", "Shibuya"],
 		imagedata: "https://travellingdiarybucket.s3.ap-southeast-2.amazonaws.com/japanimage.jpg",
 		user: newUser,

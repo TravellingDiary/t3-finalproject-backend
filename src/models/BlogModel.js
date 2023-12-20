@@ -43,11 +43,6 @@ const BlogSchema = new Schema({
 		required: true,
 		unique: false
 	},
-	// tags: {
-	// 	type: String,
-	// 	required: true,
-	// 	unique: false
-	// },
 	imagedata: {
 		type: String,
 		required: true,
