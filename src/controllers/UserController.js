@@ -3,6 +3,7 @@ const express = require('express');
 const { User } = require('../models/UserModel');
 const router = express.Router();
 const bcrypt = require("bcrypt");
+const { authenticateJWT } = require('../middleware/AuthMiddleware');
 
 // Define routes for user controller
 // GET /users - Get all users
@@ -59,26 +60,44 @@ router.post('/createuser', async (req, res) => {
     }
 });
 
-// PUT /users/:id - Update a user by ID
-router.put('/users/:userid', async (req, res) => {
+// PATCH /users/update - Update a user
+router.patch('/update', authenticateJWT, async (req, res) => {
     try {
-      const { username, email } = req.body;
-  
-      // Validate request body
-      if (!username || !email) {
-        return res.status(400).json({ error: 'Please provide username and email' });
+      // get user Id from the decoded jwt object
+      console.log(req.user.userId)
+
+      // get user Id from the decoded jwt object and convert to string
+      const userId = req.user.userId.toString()
+
+      console.log(userId)
+      // Find the user from userId
+      const user = await User.findOne({ _id: userId })
+      console.log(user)
+
+      // Update the user properties
+      user.firstName = req.body.firstName || user.firstName;
+      user.lastName = req.body.lastName || user.lastName;
+      user.username = req.body.username || user.username;
+      user.email = req.body.email || user.email;
+      user.regionsOfInterest = req.body.regionsOfInterest || user.regionsOfInterest;
+      user.countriesOfInterest = req.body.countriesOfInterest || user.countriesOfInterest;
+
+      // Check if a new password is provided
+      if (req.body.password) {
+        // Hash and salt the new password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(req.body.password, salt);
+
+        // Update the user's password with the hashed password
+        user.password = hashedPassword;
       }
+
+      // Save the updated user
+      await user.save();
   
-      const user = await User.findByIdAndUpdate(
-        req.params.userid,
-        { name, email },
-        { new: true }
-      );
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-  
-      res.json(user);
+      res.json({
+        user: user
+      });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Server Error' });

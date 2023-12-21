@@ -236,10 +236,13 @@ router.patch("/image/:id", authenticateJWT, upload.single('image'), async (reque
         }
 
         console.log(request.user.userId)
+        // Find the user from jwt token and use this to see if user is admin
+        const checkIsAdminUser = await User.findOne({ _id: request.user.userId});
+
         console.log(result.user._id)
 
-        // Check if the logged in user is the user that created the blog
-        if (result.user._id.toString() === request.user.userId) {
+        // Check if the logged in user is the user that created the blog or if they are admin
+        if (result.user._id.toString() === request.user.userId || checkIsAdminUser.isAdmin) {
             // Update the blog properties
             result.title = request.body.title || result.title;
             result.locationname = request.body.locationname || result.locationname;
@@ -305,9 +308,12 @@ router.delete("/delete/:id", authenticateJWT, async (request, response) => {
             return response.status(404).json({ error: 'Blog not found' });
         }
 
+        // Find the user from jwt token and use this to see if user is admin
+        const checkIsAdminUser = await User.findOne({ _id: request.user.userId});
+
         console.log(request.user.userId)
-        // Check if the logged in user is the user that created the blog
-        if (result.user._id.toString() === request.user.userId) {
+        // Check if the logged in user is the user that created the blog or if user is Admin
+        if (result.user._id.toString() === request.user.userId || checkIsAdminUser.isAdmin) {
 
             // Delete picture in S3 bucket
             const params = {
