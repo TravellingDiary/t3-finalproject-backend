@@ -81,13 +81,44 @@ router.post('/createcomment', async (req, res) => {
 // Find one comment by its ID, and modify that comment. 
 // Patch is for whatever properties are provided,
 // does not overwrite or remove any unmentioned properties of the cat 
-router.patch("/:commentid", async (request, response) => {
-	let result = null;
+router.patch("/commentid", authenticateJWT, async (request, response) => {
+	try {
+        const commentid = request.params.id;
+        console.log(commentid);
 
-	response.json({
-		Comment: result
-	});
+        const result = await Comment.findById({ _id: commentid }).populate('user');
+        console.log(result);
 
+        if (!result) {
+            return response.status(404).json({ error: 'Comment not found' });
+        }
+
+        console.log(request.user.userId)
+        console.log(result.user._id)
+
+		if (result.user._id.toString() === request.user.userId) {
+            // Updates the existing comment with new comment information
+            result.commentId = request.body.commentId || result.commentId;
+            result.commentbody = request.body.commentbody || result.commentbody;
+            result.userId = request.body.userId || result.userId;
+            result.blogId = request.body.blogId || result.blogId;
+            
+			// Saves the updated comment
+            await result.save();
+
+            response.json({
+                Comment: result
+            });
+		} else {
+            const errorMessage = "You are not authorized to edit this comment";
+            response.status(403).json({
+                Comment: errorMessage
+            });
+        }
+    } catch (error) {
+        console.error("Error updating comment by ID:", error);
+        response.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
 // Find one comment by its ID,
